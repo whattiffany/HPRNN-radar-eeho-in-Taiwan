@@ -1,9 +1,7 @@
 from configs import configs
-# from time import time
 import os
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 from HPRNN import HPRNN
@@ -23,48 +21,82 @@ def test(model, model_name, save_path, itr, device, test_loader, data_name):
     with torch.no_grad():
         num_of_batch_size = test_loader.step_per_epoch
         for index in range(num_of_batch_size):
-            data, target = test_loader.generator_getClassifiedItems_3(index, "Sun_Moon_Lake")
+            place = "Sun_Moon_Lake"
+            data, target = test_loader.generator_getClassifiedItems_3(index, place)
             data = torch.FloatTensor(data).to(device) 
             target = torch.FloatTensor(target).to(device)
             output = model(data)
-            test_loss += F.mse_loss(output, target,reduction='mean').item() 
+            # test_loss += F.mse_loss(output, target,reduction='mean').item() 
             output = output.reshape(-1,configs.output_length,512,512,1)
+            print("output",output.shape)
             target = target.reshape(-1,configs.output_length,512,512,1)
-
+            print("target",target.shape)
+            sum_mse = 0
+            new_gt = []
+            new_output = []
+            img_size = 128
             for i in range(configs.output_length):
                     vis_gx = np.array(torch.squeeze(output[:, i, :, :, :]).cpu())
                     vis_x = np.array(torch.squeeze(target[:, i, :, :, :]).cpu())
-                    # clear dbz < 1
-                    vis_gx[vis_gx <= 1] = 0             
-                    visualized_area_with_map(vis_gx, 'Sun_Moon_Lake', shape_size=[512,512], title='vis_pred_{}'.format(i), savepath=save_test_path)
-                    visualized_area_with_map(vis_x, 'Sun_Moon_Lake', shape_size=[512,512], title='vis_gt_{}'.format(i), savepath=save_test_path)   
-                    
-                    fn = save_test_path+'_sqe{}.txt'.format(i)
+
+                    #重新以中心點取往外的大小                    
+                    a=int(512/2-img_size/2)
+                    b=int(512/2+img_size/2)
+                    vis_gx=vis_gx[a:b,a:b]
+                    vis_x=vis_x[a:b,a:b]                       
+                    vis_gx[vis_gx <= 1] = 0    # clear dbz < 1  
+                    new_gt.append(vis_x)
+                    new_output.append(vis_gx)
+                    visualized_area_with_map(vis_gx, 'Sun_Moon_Lake', shape_size=[128,128], title='vis_pred_{}'.format(i), savepath=save_test_path)
+                    visualized_area_with_map(vis_x, 'Sun_Moon_Lake', shape_size=[128,128], title='vis_gt_{}'.format(i), savepath=save_test_path)   
+                    # fn = save_test_path+'_sqe{}.txt'.format(i)
                     # np.savetxt(save_test_path+'output_{}.csv'.format(i), vis_gx, delimiter = ',')
                     mse = np.square(vis_x - vis_gx).sum()
-                    mse = mse/(512*512)
-                    with open(fn,'a') as file_obj:
-                        file_obj.write('output[{}]_mse={}' .format(i,str(mse))+'\n')
-                        file_obj.write('output[{}]_rmse={}' .format(i,str(np.sqrt(mse)))+'\n')
+                    mse = mse/(64*64)
+                    sum_mse += mse
+                    # with open(fn,'a') as file_obj:
+                    #     file_obj.write('output[{}]_mse={}' .format(i,str(mse))+'\n')
+                    #     file_obj.write('output[{}]_rmse={}' .format(i,str(np.sqrt(mse)))+'\n')
                         
-                    
-    test_loss /= num_of_batch_size
+    new_gt = np.array(new_gt).reshape(-1,configs.output_length,128,128,1)  
+    print(new_gt.shape)              
+    new_output = np.array(new_output).reshape(-1,configs.output_length,128,128,1)    
+    print(new_output.shape)            
+    test_loss = sum_mse / configs.output_length
     print('\nTest set: Average loss: {:.4f}'.format(test_loss))
-    output = np.array(output.cpu())
-    target = np.array(target.cpu())
-    rmse=np.sqrt(((output - target) ** 2).mean())
-    rmse_1th=np.sqrt(((output[:, :6, :, :, :] - target[:, :6, :, :, :]) ** 2).mean())
-    rmse_2th=np.sqrt(((output[:, 6:, :, :, :] - target[:, 6:, :, :, :]) ** 2).mean())
-    # print(output[:, :6, :, :, :].shape)
-    # print(output[:, 6:, :, :, :].shape)
-
+    
+    #局部找過山個案
+    rmse = np.sqrt(((new_gt-new_output)**2).mean())
+    rmse_1th = np.sqrt(((new_gt[:, :6, :, :, :]-new_output[:, :6, :, :, :])**2).mean())
+    rmse_2th = np.sqrt(((new_gt[:, 6:, :, :, :]-new_output[:, 6:, :, :, :])**2).mean())
     fn = save_test_path + '{}_rmse.txt'.format(data_name)
     with open(fn,'a') as file_obj:
         file_obj.write('rmse=' + str(rmse)+'\n')
         file_obj.write('rmse1th=' + str(rmse_1th)+'\n')
         file_obj.write('rmse2th=' + str(rmse_2th)+'\n')
-    csi_picture(img_out = output,test_ims= target,save_path = save_test_path+'csi_{}/'.format(data_name),data_name=data_name)
-
+    #原本
+    # test_loss /= num_of_batch_size
+    # print('\nTest set: Average loss: {:.4f}'.format(test_loss))
+    # output = np.array(output.cpu())
+    # target = np.array(target.cpu())
+    # rmse=np.sqrt(((output - target) ** 2).mean())
+    # rmse_1th=np.sqrt(((output[:, :6, :, :, :] - target[:, :6, :, :, :]) ** 2).mean())
+    # rmse_2th=np.sqrt(((output[:, 6:, :, :, :] - target[:, 6:, :, :, :]) ** 2).mean())
+    # print(output[:, :6, :, :, :].shape)
+    # print(output[:, 6:, :, :, :].shape)
+    # fn = save_test_path + '{}_rmse.txt'.format(data_name)
+    # with open(fn,'a') as file_obj:
+    #     file_obj.write('rmse=' + str(rmse)+'\n')
+    #     file_obj.write('rmse1th=' + str(rmse_1th)+'\n')
+    #     file_obj.write('rmse2th=' + str(rmse_2th)+'\n')
+    
+    csi_picture(img_out = new_output,test_ims= new_gt,save_path = save_test_path+'csi_{}/'.format(data_name),data_name=data_name)
+    
+    #直接計算CSI
+    # csi = np.genfromtxt('D:/radar/HPRNN/save_model/bmse/test_itr_160_csi_202005270000to12/csi_202005270000to12/202005270000_07to12.csv',delimiter=',')
+    # data_name = "20200527_07to12"
+    # draw_CSI(csi, np.array(output.cpu()),np.array(target.cpu()),data_name,save_test_path+'csi_202005270000to12/')
+    
 def draw_CSI(csi, data_name, save_path):
         ## Draw thesholds CSI
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 6))
@@ -122,17 +154,23 @@ def main():
     torch.manual_seed(configs.seed)
     device = configs.device
     save_path = configs.save_path
-    load_radar_echo_df_path = None#"E:/radar/202108061000to12_512x512.pkl"
-    radar_echo_storage_path = "E:/radar/NWP/test_NWP/20220223/"
-    data_name = '202204020500to12'
-    date_date=[['2022-04-02 05:10','2022-04-02 05:11']]
-    test_date=[['2022-04-02 05:10','2022-04-02 05:11']]
-    data_name = '202202230600to12'
-    date_date=[['2022-02-23 06:10','2022-02-23 06:11']]
-    test_date=[['2022-02-23 06:10','2022-02-23 06:11']]
-
+    load_radar_echo_df_path = None #"D:/radar/HPRNN/202108061300to12(Sun_Moon_Lake)_128_128x128.pkl"
+    radar_echo_storage_path = "I:/radar/20210606and0806data/"
+    data_name = "202005270500to12(Sun_Moon_Lake)"
+    test_date=[['2020-05-27 05:00', '2020-05-27 05:01']]
+    date_date=[['2020-05-27 05:00', '2020-05-27 05:01']]
+    # data_name = "202008252000to12"
+    # test_date=[['2020-08-25 20:10', '2020-08-25 20:11']]
+    # date_date=[['2020-08-25 20:10', '2020-08-25 20:11']]
+    # data_name = '202106051000to12'
+    # date_date=[['2021-06-05 10:10','2021-06-05 10:11']]
+    # test_date=[['2021-06-05 10:10','2021-06-05 10:11']]
+    # data_name = '202106060800to12(Sun_Moon_Lake)'
+    # date_date=[['2021-06-06 08:10','2021-06-06 08:11']]
+    # test_date=[['2021-06-06 08:10','2021-06-06 08:11']]
     radar = load_data(
         radar_echo_storage_path=radar_echo_storage_path,
+        # 'data/RadarEcho_Bao_Zhong_2018_08240010_T6toT6_inoutputshape64_random.pkl',#None,#load_radar_echo_df_path,
         load_radar_echo_df_path=load_radar_echo_df_path,
         input_shape=[512, 512],
         output_shape=[512, 512],
@@ -146,14 +184,13 @@ def main():
     )
     if not load_radar_echo_df_path:
         radar.exportRadarEchoFileList()
-        radar.saveRadarEchoDataFrame(path=configs.save_path ,load_name_pkl='{}_512x512'.format(data_name))
+        radar.saveRadarEchoDataFrame(path=configs.save_path ,load_name_pkl='{}_128x128'.format(data_name))
     test_loader = radar.generator('test', batch_size=1, save_path=save_path)
     model = HPRNN(64).to(device)
-    # print(model)
-    # optimizer = optim.Adam(model.parameters(), lr=configs.lr)
-    model_name = "model55_loss24.494370475957663.pkl"
-    save_path = save_path+"/save_model/"
-    itr = 55
+    print(model)
+    model_name = "model40_loss27.37463791514703.pkl"
+    save_path = save_path+"/save_model/weight1.2.5/"
+    itr = 40
     test(model, model_name, save_path, itr, device, test_loader, data_name)
 
 

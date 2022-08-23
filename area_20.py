@@ -142,6 +142,20 @@ class area_20_C1F941 :#雪嶺
 class area_20_C1R120 :#上德文
     lat = 22.7650  
     lon = 120.6964 
+class area_20_C1F871 :#上谷關
+    lat = 24.2034  
+    lon = 120.0186 
+class area_20_C1V600 :#藤枝
+    lat = 23.0719  
+    lon = 120.75700 
+class area_20_C0H9C0 :#合歡山
+    lat = 24.1434  
+    lon = 121.2725 
+class area_20_C0I480 :#梅峰
+    lat = 24.0852  
+    lon = 121.1735 
+
+
     '''
     466880 - Banqiao
 466940 - Keelung
@@ -185,4 +199,8 @@ area_20={
         'Yuli':area_20_C0Z061,
         'Snow_Ridge':area_20_C1F941,
         'Shangdewen':area_20_C1R120,
+        'Shangguguan':area_20_C1F871,
+        'Tengzhi':area_20_C1V600,
+        'Hehuan Mountain':area_20_C0H9C0,
+        'Meifeng':area_20_C0I480
         }
